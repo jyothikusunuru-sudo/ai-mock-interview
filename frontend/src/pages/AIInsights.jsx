@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_BASE_URL } from "../api";
 
 function AIInsights() {
   const navigate = useNavigate();
@@ -28,7 +29,7 @@ function AIInsights() {
         // --------------------------------------
 
         const interviewsResponse = await fetch(
-          "http://127.0.0.1:8000/interviews",
+          `${API_BASE_URL}/interviews`,
           {
             method: "GET",
             headers: {
@@ -82,7 +83,7 @@ function AIInsights() {
         // --------------------------------------
 
         const reportResponse = await fetch(
-          `http://127.0.0.1:8000/interviews/${latestCompleted.id}/report`,
+          `${API_BASE_URL}/interviews/${latestCompleted.id}/report`,
           {
             method: "GET",
             headers: {

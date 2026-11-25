@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { CheckCircle, Loader2 } from "lucide-react";
-
-const API_URL = "http://127.0.0.1:8000";
+import { API_BASE_URL } from "../api";
 
 function Settings() {
 
@@ -51,7 +50,7 @@ function Settings() {
     try {
 
       const response = await fetch(
-        `${API_URL}/profile`,
+        `${API_BASE_URL}/profile`,
         {
           method: "GET",
           headers: {

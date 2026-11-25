@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { API_BASE_URL } from "../api";
 
 function Analysis() {
   const navigate = useNavigate();
@@ -36,7 +37,7 @@ function Analysis() {
 
         if (!selectedInterviewId) {
           const interviewsResponse = await fetch(
-            "http://127.0.0.1:8000/interviews",
+            `${API_BASE_URL}/interviews`,
             {
               method: "GET",
               headers: {
@@ -103,7 +104,7 @@ function Analysis() {
         // ==========================================
 
         const response = await fetch(
-          `http://127.0.0.1:8000/interviews/${selectedInterviewId}/report`,
+          `${API_BASE_URL}/interviews/${selectedInterviewId}/report`,
           {
             method: "GET",
             headers: {

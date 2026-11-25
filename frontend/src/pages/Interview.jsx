@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { Mic, MicOff, Volume2, VolumeX, RotateCcw } from "lucide-react";
+import { API_BASE_URL } from "../api";
 
 function Interview() {
   const location = useLocation();
@@ -115,7 +116,7 @@ function Interview() {
         }
 
         const response = await fetch(
-          `http://127.0.0.1:8000/interview-questions/${interviewId}`,
+          `${API_BASE_URL}/interview-questions/${interviewId}`,
           {
             method: "GET",
             headers: {
@@ -526,7 +527,7 @@ function Interview() {
       // ========================================
 
       const answerResponse = await fetch(
-        "http://127.0.0.1:8000/answers",
+        `${API_BASE_URL}/answers`,
         {
           method: "POST",
 
@@ -595,7 +596,7 @@ function Interview() {
 
       try {
         const evaluationResponse = await fetch(
-          `http://127.0.0.1:8000/evaluate-answer/${answerId}`,
+          `${API_BASE_URL}/evaluate-answer/${answerId}`,
           {
             method: "POST",
 

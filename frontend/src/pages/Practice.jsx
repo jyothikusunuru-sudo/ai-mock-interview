@@ -8,8 +8,7 @@ import {
   Loader2,
   Trophy,
 } from "lucide-react";
-
-const API_URL = "http://127.0.0.1:8000";
+import { API_BASE_URL } from "../api";
 
 function Practice() {
   // ==========================================
@@ -108,7 +107,7 @@ function Practice() {
       // --------------------------------------
 
       const response = await fetch(
-        `${API_URL}/practice/questions?category=${encodeURIComponent(
+        `${API_BASE_URL}/practice/questions?category=${encodeURIComponent(
           type
         )}&difficulty=${encodeURIComponent(level)}`,
         {
@@ -148,7 +147,7 @@ function Practice() {
       // --------------------------------------
 
       const generateResponse = await fetch(
-        `${API_URL}/practice/generate?category=${encodeURIComponent(
+        `${API_BASE_URL}/practice/generate?category=${encodeURIComponent(
           type
         )}&difficulty=${encodeURIComponent(level)}&total_questions=5`,
         {
@@ -209,7 +208,7 @@ function Practice() {
 
     try {
       const response = await fetch(
-        `${API_URL}/practice/stats`,
+        `${API_BASE_URL}/practice/stats`,
         {
           method: "GET",
           headers: {
@@ -286,7 +285,7 @@ function Practice() {
 
     try {
       const response = await fetch(
-        `${API_URL}/practice/attempt`,
+        `${API_BASE_URL}/practice/attempt`,
         {
           method: "POST",
           headers: {

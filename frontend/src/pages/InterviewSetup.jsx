@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_BASE_URL } from "../api";
 
 function InterviewSetup() {
   const navigate = useNavigate();
@@ -25,7 +26,7 @@ function InterviewSetup() {
       }
 
       const response = await fetch(
-        "http://127.0.0.1:8000/interviews",
+        `${API_BASE_URL}/interviews`,
         {
           method: "POST",
           headers: {

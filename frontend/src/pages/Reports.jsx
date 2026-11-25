@@ -5,6 +5,7 @@ import {
   ArrowRight,
   RefreshCw,
 } from "lucide-react";
+import { API_BASE_URL } from "../api";
 
 function Reports() {
   const navigate = useNavigate();
@@ -29,7 +30,7 @@ function Reports() {
       }
 
       const response = await fetch(
-        "http://127.0.0.1:8000/interviews",
+        `${API_BASE_URL}/interviews`,
         {
           method: "GET",
           headers: {
