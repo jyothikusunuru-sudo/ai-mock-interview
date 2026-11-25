@@ -10,7 +10,7 @@ import os
 import secrets
 from datetime import datetime, timedelta
 
-from database import get_db
+from database import Base, engine, get_db
 
 from models import User
 from interview_models import Interview
@@ -46,6 +46,13 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
+
+
+# ==========================================
+# DATABASE TABLE CREATION
+# ==========================================
+
+Base.metadata.create_all(bind=engine)
 
 
 # ==========================================
