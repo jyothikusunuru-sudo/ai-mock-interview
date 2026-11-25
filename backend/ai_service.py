@@ -1,6 +1,9 @@
 from google import genai
 from dotenv import load_dotenv
 import json
+import os
+import time
+from google.genai import errors
 
 
 # ========================================
@@ -9,19 +12,54 @@ import json
 
 load_dotenv()
 
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+MODEL_NAME = os.getenv(
+    "GEMINI_MODEL",
+    "gemini-3.5-flash-lite",
+)
 
 # ========================================
 # GEMINI CLIENT
 # ========================================
 
-client = genai.Client()
+client = (
+    genai.Client(api_key=GOOGLE_API_KEY)
+    if GOOGLE_API_KEY
+    else None
+)
 
 
-# ========================================
-# GEMINI MODEL
-# ========================================
+class GeminiTemporarilyUnavailable(RuntimeError):
+    pass
 
-MODEL_NAME = "gemini-3.5-flash-lite"
+
+def require_ai_client():
+    if client is None:
+        raise RuntimeError(
+            "GOOGLE_API_KEY is not configured. "
+            "Please set it in backend/.env or the process environment."
+        )
+
+    return client
+
+
+def _generate_content_with_retry(ai_client, prompt):
+    for attempt in range(4):
+        try:
+            return ai_client.models.generate_content(
+                model=MODEL_NAME,
+                contents=prompt
+            )
+        except errors.APIError as exc:
+            if exc.code != 503:
+                raise
+
+            if attempt == 3:
+                raise GeminiTemporarilyUnavailable(
+                    "Gemini service is temporarily unavailable after 4 attempts."
+                ) from exc
+
+            time.sleep(2 ** (attempt + 1))
 
 
 # ========================================
@@ -35,6 +73,7 @@ def generate_interview_questions(
     difficulty,
     total_questions
 ):
+    ai_client = require_ai_client()
 
     prompt = f"""
 You are an AI interviewer.
@@ -62,10 +101,7 @@ Requirements:
 - Do not add explanations.
 """
 
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt
-    )
+    response = _generate_content_with_retry(ai_client, prompt)
 
     text = response.text.strip()
 
@@ -89,6 +125,7 @@ def evaluate_interview_answer(
     interview_type,
     difficulty
 ):
+    ai_client = require_ai_client()
 
     prompt = f"""
 You are an AI interview evaluator.
@@ -134,10 +171,7 @@ Return ONLY valid JSON in exactly this format:
 }}
 """
 
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt
-    )
+    response = _generate_content_with_retry(ai_client, prompt)
 
     text = response.text.strip()
 
@@ -153,6 +187,7 @@ def generate_practice_questions(
     difficulty,
     total_questions=5
 ):
+    ai_client = require_ai_client()
 
     prompt = f"""
 You are an AI interview practice assistant.
@@ -194,10 +229,7 @@ Return exactly this format:
 ]
 """
 
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt
-    )
+    response = _generate_content_with_retry(ai_client, prompt)
 
     text = response.text.strip()
 

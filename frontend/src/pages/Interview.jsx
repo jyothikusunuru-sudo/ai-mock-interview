@@ -24,6 +24,7 @@ function Interview() {
   const [timeLeft, setTimeLeft] = useState(60);
   const [submitting, setSubmitting] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [submissionMessage, setSubmissionMessage] = useState("");
 
   // AI interviewer voice
   const [voiceEnabled, setVoiceEnabled] = useState(true);
@@ -50,6 +51,8 @@ function Interview() {
   // restoring the previous answer when
   // we move to the next question.
   const submittingAnswerRef = useRef(false);
+  const submissionInProgressRef = useRef(false);
+  const answerSavedForQuestionRef = useRef(false);
 
   // ==========================================
   // CAMERA + MICROPHONE
@@ -471,16 +474,21 @@ function Interview() {
   // ==========================================
 
   const handleSubmitAnswer = async () => {
-    if (submitting) {
+    if (
+      submissionInProgressRef.current ||
+      answerSavedForQuestionRef.current
+    ) {
       return;
     }
 
+    submissionInProgressRef.current = true;
     // Tell speech recognition that
     // we are submitting the current answer.
     submittingAnswerRef.current = true;
 
     if (!currentQuestionText) {
       submittingAnswerRef.current = false;
+      submissionInProgressRef.current = false;
       return;
     }
 
@@ -494,7 +502,10 @@ function Interview() {
 
     const cleanedAnswer = answer.trim();
 
+    setSubmissionMessage("");
     setSubmitting(true);
+
+    let answerSaved = false;
 
     try {
       const token =
@@ -555,6 +566,9 @@ function Interview() {
         return;
       }
 
+      answerSaved = true;
+      answerSavedForQuestionRef.current = true;
+
       console.log(
         "Answer saved successfully:",
         answerData
@@ -576,8 +590,11 @@ function Interview() {
       // STEP 2: AI EVALUATION
       // ========================================
 
-      const evaluationResponse =
-        await fetch(
+      let evaluationData = null;
+      let evaluationPending = false;
+
+      try {
+        const evaluationResponse = await fetch(
           `http://127.0.0.1:8000/evaluate-answer/${answerId}`,
           {
             method: "POST",
@@ -589,30 +606,43 @@ function Interview() {
           }
         );
 
-      const evaluationData =
-        await evaluationResponse.json();
+        const responseData = await evaluationResponse.json();
 
-      if (!evaluationResponse.ok) {
-        console.error(
-          "AI evaluation failed:",
-          evaluationData
-        );
+        if (evaluationResponse.status === 401) {
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("user");
+          navigate("/login");
+          return;
+        }
 
-        alert(
-          evaluationData.detail ||
-            "AI evaluation failed. Please try again."
-        );
+        if (!evaluationResponse.ok) {
+          throw new Error(
+            responseData.message ||
+              responseData.detail ||
+              "AI evaluation is temporarily unavailable."
+          );
+        }
 
-        submittingAnswerRef.current =
-          false;
-
-        return;
+        evaluationData = responseData;
+        evaluationPending =
+          responseData.status === "pending";
+      } catch (error) {
+        console.error("AI evaluation failed:", error);
+        evaluationPending = true;
       }
 
-      console.log(
-        "AI evaluation successful:",
-        evaluationData
-      );
+      if (evaluationPending) {
+        setSubmissionMessage(
+          "Your answer was saved, but AI evaluation is temporarily unavailable. You can continue your interview."
+        );
+      }
+
+      if (!evaluationPending) {
+        console.log(
+          "AI evaluation successful:",
+          evaluationData
+        );
+      }
 
       // ========================================
       // CREATE ANSWER + EVALUATION OBJECT
@@ -629,22 +659,24 @@ function Interview() {
           answerId,
 
         technicalScore:
-          evaluationData.technical_score,
+          evaluationData?.technical_score ?? null,
 
         communicationScore:
-          evaluationData.communication_score,
+          evaluationData?.communication_score ?? null,
 
         relevanceScore:
-          evaluationData.relevance_score,
+          evaluationData?.relevance_score ?? null,
 
         clarityScore:
-          evaluationData.clarity_score,
+          evaluationData?.clarity_score ?? null,
 
         overallScore:
-          evaluationData.overall_score,
+          evaluationData?.overall_score ?? null,
 
         feedback:
-          evaluationData.feedback,
+          evaluationData?.feedback ?? null,
+
+        evaluationPending,
       };
 
       // ========================================
@@ -688,6 +720,8 @@ function Interview() {
         // Allow speech recognition
         // for the next question.
         submittingAnswerRef.current =
+          false;
+        answerSavedForQuestionRef.current =
           false;
 
         // Reset timer.
@@ -749,12 +783,14 @@ function Interview() {
         "Unable to connect to the backend."
       );
 
-      submittingAnswerRef.current =
-        false;
-
     } finally {
 
       setSubmitting(false);
+      submissionInProgressRef.current = false;
+
+      if (!answerSaved) {
+        submittingAnswerRef.current = false;
+      }
 
     }
   };
@@ -887,6 +923,14 @@ function Interview() {
 
       </div>
 
+      {submissionMessage && (
+        <div
+          role="status"
+          className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800"
+        >
+          {submissionMessage}
+        </div>
+      )}
 
       {/* ====================================== */}
       {/* INTERVIEW INFORMATION */}

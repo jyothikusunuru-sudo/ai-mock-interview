@@ -1,10 +1,12 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 import bcrypt
 import json
+import os
 import secrets
 from datetime import datetime, timedelta
 
@@ -26,6 +28,7 @@ from auth import create_access_token
 from dependencies import get_current_user
 
 from ai_service import (
+    GeminiTemporarilyUnavailable,
     generate_interview_questions,
     evaluate_interview_answer,
     generate_practice_questions
@@ -56,18 +59,26 @@ app = FastAPI()
 # CORS
 # ==========================================
 
+default_cors_origins = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost:5176",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+    "http://127.0.0.1:5175",
+    "http://127.0.0.1:5176",
+]
+
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "").split(",")
+    if origin.strip()
+] or default_cors_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://localhost:5175",
-        "http://localhost:5176",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174",
-        "http://127.0.0.1:5175",
-        "http://127.0.0.1:5176",
-    ],
+    allow_origins=cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -653,6 +664,8 @@ def evaluate_answer(
             "feedback": "No answer was provided."
         }
 
+    saved_answer_id = answer.id
+
     # --------------------------------
     # CALL GEMINI
     # --------------------------------
@@ -671,6 +684,21 @@ def evaluate_answer(
         print("AI RAW RESULT:")
         print(ai_result)
         print("==============================\n")
+
+    except GeminiTemporarilyUnavailable as e:
+
+        db.rollback()
+
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "pending",
+                "code": "evaluation_temporarily_unavailable",
+                "message": str(e),
+                "answer_id": saved_answer_id,
+                "evaluation_id": None
+            }
+        )
 
     except Exception as e:
 

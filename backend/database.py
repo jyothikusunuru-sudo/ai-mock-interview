@@ -7,7 +7,22 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-engine = create_engine(DATABASE_URL)
+if not DATABASE_URL or not DATABASE_URL.strip():
+    raise RuntimeError(
+        "DATABASE_URL is not configured. "
+        "Please set it in backend/.env or the process environment."
+    )
+
+try:
+    engine = create_engine(
+        DATABASE_URL.strip(),
+        pool_pre_ping=True,
+    )
+except Exception as exc:
+    raise RuntimeError(
+        "DATABASE_URL is invalid. "
+        "Use a valid SQLAlchemy database URL."
+    ) from exc
 
 SessionLocal = sessionmaker(
     autocommit=False,
