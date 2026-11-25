@@ -1,3 +1,4 @@
+
 from google import genai
 from dotenv import load_dotenv
 import json
@@ -13,10 +14,12 @@ from google.genai import errors
 load_dotenv()
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+
 MODEL_NAME = os.getenv(
     "GEMINI_MODEL",
-    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
 )
+
 
 # ========================================
 # GEMINI CLIENT
@@ -43,23 +46,63 @@ def require_ai_client():
     return client
 
 
+# ========================================
+# GEMINI API RETRY HANDLER
+# ========================================
+
 def _generate_content_with_retry(ai_client, prompt):
-    for attempt in range(4):
+
+    max_attempts = 4
+
+    for attempt in range(max_attempts):
+
         try:
-            return ai_client.models.generate_content(
+
+            response = ai_client.models.generate_content(
                 model=MODEL_NAME,
                 contents=prompt
             )
+
+            if not response or not response.text:
+                raise RuntimeError(
+                    "Gemini returned an empty response."
+                )
+
+            return response
+
         except errors.APIError as exc:
-            if exc.code != 503:
+
+            print("\n========== GEMINI API ERROR ==========")
+            print("Model:", MODEL_NAME)
+            print("Error code:", exc.code)
+            print("Error message:", str(exc))
+            print("Attempt:", attempt + 1)
+            print("======================================\n")
+
+            # Retry temporary server errors and rate limits.
+            if exc.code not in (429, 500, 502, 503, 504):
+
                 raise
 
-            if attempt == 3:
+            if attempt == max_attempts - 1:
+
                 raise GeminiTemporarilyUnavailable(
-                    "Gemini service is temporarily unavailable after 4 attempts."
+                    f"Gemini service is temporarily unavailable "
+                    f"after {max_attempts} attempts. "
+                    f"Last error code: {exc.code}"
                 ) from exc
 
-            time.sleep(2 ** (attempt + 1))
+            wait_time = 2 ** (attempt + 1)
+
+            print(
+                f"Retrying Gemini request in {wait_time} seconds..."
+            )
+
+            time.sleep(wait_time)
+
+    raise GeminiTemporarilyUnavailable(
+        "Gemini request failed."
+    )
 
 
 # ========================================
@@ -73,6 +116,7 @@ def generate_interview_questions(
     difficulty,
     total_questions
 ):
+
     ai_client = require_ai_client()
 
     prompt = f"""
@@ -101,7 +145,10 @@ Requirements:
 - Do not add explanations.
 """
 
-    response = _generate_content_with_retry(ai_client, prompt)
+    response = _generate_content_with_retry(
+        ai_client,
+        prompt
+    )
 
     text = response.text.strip()
 
@@ -125,6 +172,7 @@ def evaluate_interview_answer(
     interview_type,
     difficulty
 ):
+
     ai_client = require_ai_client()
 
     prompt = f"""
@@ -171,11 +219,38 @@ Return ONLY valid JSON in exactly this format:
 }}
 """
 
-    response = _generate_content_with_retry(ai_client, prompt)
+    response = _generate_content_with_retry(
+        ai_client,
+        prompt
+    )
 
     text = response.text.strip()
 
-    return text
+    # Remove Markdown code fences if Gemini adds them.
+    if text.startswith("```"):
+        text = text.replace("```json", "")
+        text = text.replace("```", "").strip()
+
+    # Validate that Gemini returned valid JSON.
+    evaluation = json.loads(text)
+
+    required_fields = [
+        "technical_score",
+        "communication_score",
+        "relevance_score",
+        "clarity_score",
+        "overall_score",
+        "feedback"
+    ]
+
+    for field in required_fields:
+
+        if field not in evaluation:
+            raise ValueError(
+                f"Gemini evaluation is missing field: {field}"
+            )
+
+    return json.dumps(evaluation)
 
 
 # ========================================
@@ -187,6 +262,7 @@ def generate_practice_questions(
     difficulty,
     total_questions=5
 ):
+
     ai_client = require_ai_client()
 
     prompt = f"""
@@ -213,7 +289,7 @@ Requirements:
 - Do not include unnecessary explanations.
 - Return ONLY valid JSON.
 - Do not use Markdown.
-- Do not add ```json or ```.
+- Do not add code fences.
 
 Return exactly this format:
 
@@ -229,15 +305,16 @@ Return exactly this format:
 ]
 """
 
-    response = _generate_content_with_retry(ai_client, prompt)
+    response = _generate_content_with_retry(
+        ai_client,
+        prompt
+    )
 
     text = response.text.strip()
 
-    # Remove Markdown code fences if Gemini accidentally adds them
     if text.startswith("```"):
         text = text.replace("```json", "")
-        text = text.replace("```", "")
-        text = text.strip()
+        text = text.replace("```", "").strip()
 
     questions = json.loads(text)
 
