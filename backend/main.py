@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -63,7 +64,7 @@ app = FastAPI()
 
 
 # ==========================================
-# CORS
+# CORS CONFIGURATION
 # ==========================================
 
 default_cors_origins = [
@@ -78,10 +79,24 @@ default_cors_origins = [
 ]
 
 cors_origins = [
-    origin.strip()
+    origin.strip().rstrip("/")
     for origin in os.getenv("CORS_ORIGINS", "").split(",")
     if origin.strip()
 ] or default_cors_origins
+
+
+# CORS DIAGNOSTIC LOGGING
+
+print("\n========== CORS CONFIGURATION ==========")
+print("Allowed origins:")
+
+for origin in cors_origins:
+    print(f" - {origin}")
+
+print("========================================\n")
+
+
+# APPLY CORS MIDDLEWARE
 
 app.add_middleware(
     CORSMiddleware,
@@ -211,7 +226,6 @@ def login_user(
     }
 
 
-
 # ==========================================
 # FORGOT PASSWORD
 # ==========================================
@@ -241,8 +255,6 @@ def forgot_password(
 
     db.commit()
 
-    # Local development only: return the token directly.
-    # Production should email the reset link instead.
     return {
         "message": "Password reset link generated successfully",
         "reset_token": reset_token
@@ -296,7 +308,6 @@ def reset_password(
 
     user.password = hashed_password
 
-    # Make the reset token single-use.
     user.reset_token = None
     user.reset_token_expiry = None
 
@@ -305,6 +316,7 @@ def reset_password(
     return {
         "message": "Password reset successfully. Please login with your new password."
     }
+
 
 # ==========================================
 # PROFILE
@@ -361,10 +373,6 @@ def create_interview(
     db.commit()
     db.refresh(new_interview)
 
-    # --------------------------------
-    # GENERATE QUESTIONS
-    # --------------------------------
-
     try:
 
         questions = generate_interview_questions(
@@ -389,10 +397,6 @@ def create_interview(
             detail=f"Failed to generate interview questions: {str(e)}"
         )
 
-    # --------------------------------
-    # SAVE QUESTIONS
-    # --------------------------------
-
     for index, question_text in enumerate(
         questions,
         start=1
@@ -407,10 +411,6 @@ def create_interview(
         db.add(new_question)
 
     db.commit()
-
-    # --------------------------------
-    # RESPONSE
-    # --------------------------------
 
     return {
         "message": "Interview created successfully!",
@@ -460,10 +460,6 @@ def create_answer(
     db: Session = Depends(get_db)
 ):
 
-    # --------------------------------
-    # CHECK INTERVIEW OWNERSHIP
-    # --------------------------------
-
     interview = (
         db.query(Interview)
         .filter(
@@ -478,10 +474,6 @@ def create_answer(
             status_code=404,
             detail="Interview not found"
         )
-
-    # --------------------------------
-    # CREATE ANSWER
-    # --------------------------------
 
     new_answer = InterviewAnswer(
         interview_id=answer_data.interview_id,
@@ -515,10 +507,6 @@ def create_interview_question(
     db: Session = Depends(get_db)
 ):
 
-    # --------------------------------
-    # CHECK INTERVIEW OWNERSHIP
-    # --------------------------------
-
     interview = (
         db.query(Interview)
         .filter(
@@ -533,10 +521,6 @@ def create_interview_question(
             status_code=404,
             detail="Interview not found"
         )
-
-    # --------------------------------
-    # CREATE QUESTION
-    # --------------------------------
 
     new_question = InterviewQuestion(
         interview_id=interview_id,
@@ -568,10 +552,6 @@ def get_interview_questions(
     db: Session = Depends(get_db)
 ):
 
-    # --------------------------------
-    # CHECK INTERVIEW OWNERSHIP
-    # --------------------------------
-
     interview = (
         db.query(Interview)
         .filter(
@@ -586,10 +566,6 @@ def get_interview_questions(
             status_code=404,
             detail="Interview not found"
         )
-
-    # --------------------------------
-    # GET QUESTIONS
-    # --------------------------------
 
     questions = (
         db.query(InterviewQuestion)
@@ -616,10 +592,6 @@ def evaluate_answer(
     db: Session = Depends(get_db)
 ):
 
-    # --------------------------------
-    # GET ANSWER
-    # --------------------------------
-
     answer = (
         db.query(InterviewAnswer)
         .filter(
@@ -633,10 +605,6 @@ def evaluate_answer(
             status_code=404,
             detail="Answer not found"
         )
-
-    # --------------------------------
-    # GET INTERVIEW
-    # --------------------------------
 
     interview = (
         db.query(Interview)
@@ -653,10 +621,6 @@ def evaluate_answer(
             detail="Interview not found"
         )
 
-    # --------------------------------
-    # CHECK EMPTY ANSWER
-    # --------------------------------
-
     if not answer.answer or not answer.answer.strip():
 
         return {
@@ -672,10 +636,6 @@ def evaluate_answer(
         }
 
     saved_answer_id = answer.id
-
-    # --------------------------------
-    # CALL GEMINI
-    # --------------------------------
 
     try:
 
@@ -719,10 +679,6 @@ def evaluate_answer(
             detail=f"AI evaluation failed: {str(e)}"
         )
 
-    # --------------------------------
-    # CONVERT AI JSON
-    # --------------------------------
-
     try:
 
         evaluation_data = json.loads(
@@ -746,10 +702,6 @@ def evaluate_answer(
             detail=f"Invalid AI JSON: {str(e)}"
         )
 
-    # --------------------------------
-    # VALIDATE REQUIRED FIELDS
-    # --------------------------------
-
     required_fields = [
         "technical_score",
         "communication_score",
@@ -767,10 +719,6 @@ def evaluate_answer(
                 status_code=500,
                 detail=f"AI response missing field: {field}"
             )
-
-    # --------------------------------
-    # SAVE EVALUATION
-    # --------------------------------
 
     try:
 
@@ -843,10 +791,6 @@ def evaluate_answer(
         db.commit()
         db.refresh(evaluation)
 
-        # --------------------------------
-        # CALCULATE INTERVIEW SCORE
-        # --------------------------------
-
         evaluations = (
             db.query(InterviewEvaluation)
             .join(InterviewAnswer)
@@ -884,10 +828,6 @@ def evaluate_answer(
             detail=f"Failed to save evaluation: {str(e)}"
         )
 
-    # --------------------------------
-    # RESPONSE
-    # --------------------------------
-
     return {
         "message": "Answer evaluated successfully!",
         "evaluation_id": evaluation.id,
@@ -912,10 +852,6 @@ def get_interview_report(
     db: Session = Depends(get_db)
 ):
 
-    # --------------------------------
-    # CHECK INTERVIEW OWNERSHIP
-    # --------------------------------
-
     interview = (
         db.query(Interview)
         .filter(
@@ -930,10 +866,6 @@ def get_interview_report(
             status_code=404,
             detail="Interview not found"
         )
-
-    # --------------------------------
-    # GET ANSWERS
-    # --------------------------------
 
     answers = (
         db.query(InterviewAnswer)
@@ -1044,10 +976,6 @@ def generate_practice(
     db: Session = Depends(get_db)
 ):
 
-    # --------------------------------
-    # VALIDATE CATEGORY
-    # --------------------------------
-
     valid_categories = [
         "Technical",
         "Behavioral",
@@ -1060,10 +988,6 @@ def generate_practice(
             status_code=400,
             detail="Invalid practice category."
         )
-
-    # --------------------------------
-    # VALIDATE DIFFICULTY
-    # --------------------------------
 
     valid_difficulties = [
         "Easy",
@@ -1078,20 +1002,12 @@ def generate_practice(
             detail="Invalid difficulty."
         )
 
-    # --------------------------------
-    # VALIDATE QUESTION COUNT
-    # --------------------------------
-
     if total_questions < 1 or total_questions > 10:
 
         raise HTTPException(
             status_code=400,
             detail="Total questions must be between 1 and 10."
         )
-
-    # --------------------------------
-    # CALL GEMINI
-    # --------------------------------
 
     try:
 
@@ -1113,20 +1029,12 @@ def generate_practice(
             detail=f"Failed to generate practice questions: {str(e)}"
         )
 
-    # --------------------------------
-    # VALIDATE AI RESPONSE
-    # --------------------------------
-
     if not questions:
 
         raise HTTPException(
             status_code=500,
             detail="AI did not generate any practice questions."
         )
-
-    # --------------------------------
-    # SAVE QUESTIONS
-    # --------------------------------
 
     saved_questions = []
 
@@ -1151,7 +1059,6 @@ def generate_practice(
             )
 
             db.add(new_question)
-
             db.flush()
 
             saved_questions.append({
@@ -1190,10 +1097,6 @@ def generate_practice(
             detail=f"Failed to save practice questions: {str(e)}"
         )
 
-    # --------------------------------
-    # RESPONSE
-    # --------------------------------
-
     return {
         "message": "Practice questions generated successfully!",
         "category": category,
@@ -1214,10 +1117,6 @@ def save_practice_attempt(
     db: Session = Depends(get_db)
 ):
 
-    # --------------------------------
-    # GET QUESTION
-    # --------------------------------
-
     question = (
         db.query(PracticeQuestion)
         .filter(
@@ -1232,10 +1131,6 @@ def save_practice_attempt(
             status_code=404,
             detail="Practice question not found"
         )
-
-    # --------------------------------
-    # SAVE ATTEMPT
-    # --------------------------------
 
     attempt = PracticeAttempt(
         user_id=int(current_user_id),
